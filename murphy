@@ -71,11 +71,11 @@ app.use('/redirect', liveHls.redirect);
 
 // simulate live HLS playlists with seeking support for the entire
 // event
-app.use('/event', liveHls.event);
+app.use('/event', liveHls.eventLive);
 
 // simulate live HLS playlists with limited seeking support,
 // a.k.a. "sliding window"
-app.use('/live', liveHls.live);
+app.use('/live', liveHls.eventLive);
 
 http.createServer(app).listen(murphyPort, function() {
   console.log('listening for requests at', os.hostname(), 'on port', murphyPort);

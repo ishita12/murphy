@@ -12,6 +12,7 @@
     "express": "~3.3.4",
     "express3-handlebars": "~0.5.0",
     "handlebars": "~1.0.12",
+    "is-typedarray": "^1.0.0",
     "lodash": "~2.4",
     "util": "^0.10.3"
   },

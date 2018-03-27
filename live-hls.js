@@ -78,11 +78,11 @@ getHeaderObjects = function(fileContent) {
     Discontinuity: {
       tag: '#EXT-X-DISCONTINUITY-SEQUENCE',
       value: 0
-    },
+    },/*
     ProgramDateTime: {
       tag: '#EXT-X-PROGRAM-DATE-TIME',
       value: 0
-    },
+    },*/
     Extra: []
   };
   for(var i = 0;i<lines.length;i++) {
@@ -112,12 +112,12 @@ getHeaderObjects = function(fileContent) {
       header.TargetDuration.value = lines[i].substr(indexOfColon + 1,lines[i].length-indexOfColon);
       continue;
     }
-
+    /*
     if (lines[i].indexOf('#EXT-X-PROGRAM-DATE-TIME') === 0) {
       header.ProgramDateTime.tag = '#EXT-X-PROGRAM-DATE-TIME';
       header.ProgramDateTime.value = lines[i].substr(indexOfColon + 1,lines[i].length-indexOfColon);
       continue;
-    }
+    }*/
 
     if (lines[i].toLowerCase().indexOf('.aac') > -1) {
       break;
@@ -151,10 +151,15 @@ getHeaderObjects = function(fileContent) {
 };
 
 getSegmentHeader = function(lines, index) {
+  debugger;
   var i,
     header='',
     byterange='',
-    segment;
+    segment,
+    ProgramDateTime = {
+      tag: '',
+      value: 0
+    };
   for(i=(index-1);i>0;i--) {
     //Search backwards from index to get all header lines
     if (lines[i].indexOf('EXTINF')>-1) {
@@ -167,6 +172,10 @@ getSegmentHeader = function(lines, index) {
       header = lines[i] + '\n' + header;
     } else if (lines[i].indexOf('EXT-X-MAP') > -1) {
       header = lines[i] + '\n' + header;
+    } else if (lines[i].indexOf('EXT-X-PROGRAM-DATE-TIME') > -1) {
+      ProgramDateTime.tag = '#EXT-X-PROGRAM-DATE-TIME';
+      ProgramDateTime.value = lines[i].substring(lines[i].indexOf(':')+1);
+
     } else {
       break;
     }
@@ -176,6 +185,9 @@ getSegmentHeader = function(lines, index) {
   };
   if (byterange!='') {
     segment.byterange=byterange;
+  }
+  if (ProgramDateTime!='') {
+    segment.ProgramDateTime=ProgramDateTime;
   }
   if (header!='') {
     segment.header=header;
@@ -234,10 +246,14 @@ getResources = function(fileContent, request) {
 
 getInitialValue = function(allLines) {
   var i;
+  var j;
   for (i = 0;i<allLines.length;i++) {
+
     if (allLines[i].indexOf('#EXT-X-PROGRAM-DATE-TIME')>-1) {
       return i;
-    }
+    } else if (allLines[i].indexOf('#EXTINF') > -1) {
+        return i;
+      }
   }
 };
 
@@ -275,145 +291,191 @@ extractHeader = function(header, event) {
   }
   if (header.Discontinuity) {
     lines.push(header.Discontinuity.tag + ':' + event.discontinuity);
-  }
+  }/*
   if (header.Extra) {
     for(var i = 0;i<header.Extra.length;i++) {
       lines.push(header.Extra[i]);
     }
-  }
+  }*/
   return lines;
 };
 
-extractResourceWindow = function(mfest,duration,event) {
+extractResourceWindow = function(streamType,mfest,playlist,duration,event) {
+  debugger;
   var startposition;
   var endposition;
   var overflow = 0;
   var header = mfest.header;
   var resource = mfest.resources;
-  var lines;
+  var lines = playlist.split('\n');
+  var filteredLines;
   var i;
-  startposition = Math.floor((duration*0.001)/event.rate);
-  debuglog('start before mod ' + startposition);
-  debuglog('event start '+event.start);
-  event.discontinuity=Math.floor(startposition/resource.length);
-  event.dropped=startposition;
-  if (event.dropped<0) {
-    event.dropped=0;
-  }
-  startposition = startposition%resource.length;
+  var durationSum = 0;
 
-  //startposition = startposition - (startposition % options.step);
-  if (event.lastStartPosition<startposition) {
-    debuglog('dropped: ' + event.dropped);
-  }
-  endposition = startposition + event.window-1;
+  event.init=getInitialValue(lines);
+//  for (i = 0;i<lines.length;i++){
+if(resource[0].ProgramDateTime.value != 0){
+var programDateTime = lines[event.init];
+var programDateTimeString = programDateTime.substring(programDateTime.indexOf(':')+1);
+var firstSegmentDate = new Date(programDateTimeString);
+//break;
+}
+//}
+  if (streamType.indexOf('live') > -1){
+    startposition = Math.floor((duration*0.001)/event.rate);
+    debuglog('start before mod ' + startposition);
+    debuglog('event start '+event.start);
+    event.discontinuity=Math.floor(startposition/resource.length);
+    event.dropped=startposition;
 
-  if (endposition >= resource.length) {
-    debuglog('endposition before mod: ' + endposition);
-    overflow = endposition-(resource.length-1);
+    if (event.dropped<0) {
+      event.dropped=0;
+    }
 
-    endposition = resource.length-1;
+    startposition = startposition%resource.length;
+
+    //startposition = startposition - (startposition % options.step);
+    if (event.lastStartPosition<startposition) {
+      debuglog('dropped: ' + event.dropped);
+    }
+    endposition = startposition + event.window-1;
+
+    if (endposition >= resource.length) {
+      debuglog('endposition before mod: ' + endposition);
+      overflow = endposition-(resource.length-1);
+
+      endposition = resource.length-1;
+    }
+    debuglog('startposition: ' + startposition);
+    debuglog('endposition: ' + endposition);
+    debuglog('overflow: ' + overflow);
+    debuglog('resource length: ' + resource.length);
+    debuglog('rate: ' + event.rate);
+    console.log(event.dropped);
+    filteredLines=extractHeader(header, event);
+    if(event.dropped == 0){
+    //  filteredLines.push('#EXT-X-PROGRAM-DATE-TIME' + ':' + programDateTimeString);
+        if (resource[0].ProgramDateTime) {
+          filteredLines.push(resource[0].ProgramDateTime.tag + ':' +  resource[0].ProgramDateTime.value);
+        }
+        if (resource[0].header) {
+          filteredLines.push(resource[0].header);
+        }
+        if (resource[0].byterange) {
+          filteredLines.push(resource[0].byterange);
+          }
+        if (resource[0].tsfile) {
+          filteredLines.push(resource[0].tsfile);
+        }
+    }
+
+    if (event.dropped > 0 && event.dropped<=resource.length){
+      console.log('test');
+    
+      //   if(event.dropped<=resource.length){
+          for (m=0; m<event.dropped; m++){
+         if(resource[m].header.indexOf('#EXTINF:')> -1) {
+
+             var sum =resource[m].header.substring(resource[m].header.indexOf('#EXTINF:'));
+              durationSum += parseFloat(sum.substring(sum.indexOf(':')+1).slice(0,-1));
+        }
+
+       }
+    // }
+      //  if(event.dropped > resource.length) {
+
+
+    //   }
+
+    for(k = startposition;k <= endposition;k++) {
+         console.log(k);
+        if(resource[k-1].ProgramDateTime){
+        //  for(j = 0;j<resource.length; j++){
+        //   if(lines[j].indexOf('#EXT-X-PROGRAM-DATE-TIME') > -1){
+
+        //  if (k > 0){
+            var d = firstSegmentDate.toISOString();
+            var index =resource[k-1].header.substring(resource[k-1].header.indexOf('#EXTINF:'));
+            var segmentDuration = index.substring(index.indexOf(':')+1).slice(0,-1);
+            firstSegmentDate.setTime(firstSegmentDate.getTime() + durationSum);
+            //console.log('ishita  '+resource[k].ProgramDateTime.tag);
+            resource[k].ProgramDateTime.tag = '#EXT-X-PROGRAM-DATE-TIME';
+            resource[k].ProgramDateTime.value = firstSegmentDate.toISOString();
+            filteredLines.push(resource[k].ProgramDateTime.tag + ':' +  resource[k].ProgramDateTime.value);
+
+        //  }
+      //  }
+    //  }
+        }
+        if (resource[k].header) {
+
+          filteredLines.push(resource[k].header);
+        }
+
+        if (resource[k].byterange) {
+          filteredLines.push(resource[k].byterange);
+          }
+        if (resource[k].tsfile) {
+          filteredLines.push(resource[k].tsfile);
+        }
   }
-  debuglog('startposition: ' + startposition);
-  debuglog('endposition: ' + endposition);
-  debuglog('overflow: ' + overflow);
-  debuglog('resource length: ' + resource.length);
-  debuglog('rate: ' + event.rate);
-  lines=extractHeader(header, event);
-  for(i = startposition;i <= endposition;i++) {
-    if (resource[i].header) {
-      lines.push(resource[i].header);
-    }
-    if (resource[i].byterange) {
-      lines.push(resource[i].byterange);
-    }
-    if (resource[i].tsfile) {
-      lines.push(resource[i].tsfile);
-    }
-  }
+}
+
   if (overflow>0) {
-    for(i = 0;i<overflow;i++) {
-      var referencedResource = i % resource.length;
+    //if(event.dropped > resource.length){
+    for(l = 0;l<overflow;l++) {
+      var referencedResource = l % resource.length;
 
       if (referencedResource === 0) {
-        lines.push('#EXT-X-DISCONTINUITY');
+        filteredLines.push('#EXT-X-DISCONTINUITY');
       }
 
       if (resource[referencedResource].header) {
-        lines.push(resource[referencedResource].header);
-      }
-      if (resource[referencedResource].byterange) {
-        lines.push(resource[referencedResource].byterange);
-      }
-      if (resource[referencedResource].tsfile) {
-        lines.push(resource[referencedResource].tsfile);
+        if (referencedResource==0){
+          var index =resource[resource.length-1].header.substring(resource[resource.length-1].header.indexOf('#EXTINF:'));
+          var segmentDuration = index.substring(index.indexOf(':')+1).slice(0,-1);
+        }
+        else{
+          var index =resource[referencedResource-1].header.substring(resource[referencedResource-1].header.indexOf('#EXTINF:'));
+          var segmentDuration = index.substring(index.indexOf(':')+1).slice(0,-1);
+        }
+        for(j = 0;j<resource.length; j++){
+          if(lines[j].indexOf('#EXT-X-PROGRAM-DATE-TIME') > -1){
+        firstSegmentDate.setMilliseconds(firstSegmentDate.getMilliseconds() + parseFloat(segmentDuration));
+        filteredLines.push(resource[referencedResource].ProgramDateTime.tag + ':' +  resource[referencedResource].ProgramDateTime.value);
       }
     }
+        filteredLines.push(resource[referencedResource].header);
+      }
+      if (resource[referencedResource].byterange) {
+        filteredLines.push(resource[referencedResource].byterange);
+      }
+      if (resource[referencedResource].tsfile) {
+        filteredLines.push(resource[referencedResource].tsfile);
+      }
+    }
+  //}
   }
   event.lastStartPosition = startposition;
-  return lines;
-};
-
-/**
- * creates simulated livestream m3u8 manifest file content from an existing manifest object
- * @param mfest {Object} Manifest Object
- * @param duration {number} the amount of time that has passed since the
- * stream began
- * @param event {object} a hash of parameters that affect the timing
- * of the stream
- * @return {string} the lines of the playlist that would be available
- * at the specified time
- */
-createManifest = function(mfest, duration, event) {
-  return extractResourceWindow(mfest, duration, event);
-};
-
-
-/**
- * Filter a complete m3u8 playlist and return a view that simulates
- * live playback for the given time.
- * @param playlist {string} the contents of the m3u8 file
- * @param time {number} the amount of time that has passed since the
- * stream began
- * @param options {object} a hash of parameters that affect the timing
- * of the stream
- * @return {string} the lines of the playlist that would be available
- * at the specified time
- */
-
-filterPlaylist = function(manifest, playlist, time, options) {
-
-  var startposition;
-  var filteredLines;
-  var endposition;
-  var header = manifest.header;
-  var resource = manifest.resources;
-  var overflow=0;
-  var lines = playlist.split('\n');
-
-  options.init=getInitialValue(lines);
-  // the number of the time-varying lines to be shown
-  var temptime=(time*0.001);
-  var programDateTime = lines[options.init];
-  var programDateTimeString = programDateTime.substring(programDateTime.indexOf(':')+1);
-  var firstSegmentDate = new Date(programDateTimeString);
-
-  startposition = options.init;
-  options.dropped=startposition;
-  debuglog('init: ' + options.init);
+  return filteredLines;
+} else if (streamType.indexOf('event') > -1) {
+var temptime=(duration*0.001);
+  startposition = event.init;
+  event.dropped=startposition;
+  debuglog('init: ' + event.init);
   debuglog('time * 0.001 = ' + temptime);
-  debuglog('options.rate: ' + options.rate);
+  debuglog('options.rate: ' + event.rate);
   debuglog('(time * 0.001) / options.rate = ' + startposition);
-  debuglog('startposition' + startposition + '==options.init' + options.init);
-  debuglog(startposition == options.init);
+  debuglog('startposition' + startposition + '==options.init' + event.init);
+  debuglog(startposition == event.init);
 
-  debuglog('startposition' + startposition + '%' + options.step + ' = ' + (startposition%options.step));
-  if ((startposition%options.step) == 0) {
-    debuglog('dropped: ' + options.dropped);
+  debuglog('startposition' + startposition + '%' + event.step + ' = ' + (startposition%event.step));
+  if ((startposition%event.step) == 0) {
+    debuglog('dropped: ' + event.dropped);
   }
-  debuglog('((startposition' + startposition + '-event.init' + options.init +
-    ') % (lines.length' + lines.length + '-event.init' + options.init + ')) + ' +
-    'event.init'+options.init+' = ');
+  debuglog('((startposition' + startposition + '-event.init' + event.init +
+    ') % (lines.length' + lines.length + '-event.init' + event.init + ')) + ' +
+    'event.init'+event.init+' = ');
 
   endposition = startposition + temptime;
 
@@ -426,19 +488,26 @@ filterPlaylist = function(manifest, playlist, time, options) {
     debuglog('overflow: ' + overflow);
   }
   if (filteredLines == undefined){
-    filteredLines = lines.slice(0, startposition+1);
+    filteredLines = lines.slice(0, startposition);
   }
 
 
   for (i = 0;i < resource.length;i++) {
     if (filteredLines.length<=endposition){
       if (resource[i].header) {
+        for(j = 0;j<resource.length; j++){
+          if(lines[j].indexOf('#EXT-X-PROGRAM-DATE-TIME') > -1){
+        if(i==0){
+          filteredLines.push('#EXT-X-PROGRAM-DATE-TIME' + ':' + programDateTimeString);
+        }
         if (i!=0){
           var index =resource[i-1].header.substring(resource[i-1].header.indexOf('#EXTINF:'));
           var segmentDuration = index.substring(index.indexOf(':')+1).slice(0,-1);
           firstSegmentDate.setMilliseconds(firstSegmentDate.getMilliseconds() + parseFloat(segmentDuration));
-          filteredLines.push(header.ProgramDateTime.tag + ':' +  firstSegmentDate.toISOString());
+          filteredLines.push(('#EXT-X-PROGRAM-DATE-TIME') + ':' +  firstSegmentDate.toISOString());
         }
+      }
+    }
         filteredLines.push(resource[i].header);
       }
       if (resource[i].byterange) {
@@ -471,8 +540,202 @@ filterPlaylist = function(manifest, playlist, time, options) {
           var index =resource[referencedResource-1].header.substring(resource[referencedResource-1].header.indexOf('#EXTINF:'));
           var segmentDuration = index.substring(index.indexOf(':')+1).slice(0,-1);
         }
+        for(j = 0;j<resource.length; j++){
+          if(lines[j].indexOf('#EXT-X-PROGRAM-DATE-TIME') > -1){
         firstSegmentDate.setMilliseconds(firstSegmentDate.getMilliseconds() + parseFloat(segmentDuration));
-        filteredLines.push(header.ProgramDateTime.tag + ':' +  firstSegmentDate.toISOString());
+        filteredLines.push(('#EXT-X-PROGRAM-DATE-TIME') + ':' +  firstSegmentDate.toISOString());
+      }
+    }
+        filteredLines.push(resource[referencedResource].header);
+      }
+      if (resource[referencedResource].byterange) {
+        filteredLines.push(resource[referencedResource].byterange);
+      }
+      if (resource[referencedResource].tsfile) {
+        filteredLines.push(resource[referencedResource].tsfile);
+      }
+    }
+  }
+  event.counter++;
+  return filteredLines.join('\n');
+  }
+
+
+
+    //
+
+
+
+
+
+/*
+    if (resource[i].header) {
+      lines.push(resource[i].header);
+    }
+    if (resource[i].byterange) {
+      lines.push(resource[i].byterange);
+    }
+    if (resource[i].tsfile) {
+      lines.push(resource[i].tsfile);
+    }
+  //}
+  if (overflow>0) {
+    for(i = 0;i<overflow;i++) {
+      var referencedResource = i % resource.length;
+
+      if (referencedResource === 0) {
+        lines.push('#EXT-X-DISCONTINUITY');
+      }
+
+      if (resource[referencedResource].header) {
+        lines.push(resource[referencedResource].header);
+      }
+      if (resource[referencedResource].byterange) {
+        lines.push(resource[referencedResource].byterange);
+      }
+      if (resource[referencedResource].tsfile) {
+        lines.push(resource[referencedResource].tsfile);
+      }
+    }
+  }
+  event.lastStartPosition = startposition;
+  return lines;*/
+};
+
+/**
+ * creates simulated livestream m3u8 manifest file content from an existing manifest object
+ * @param mfest {Object} Manifest Object
+ * @param duration {number} the amount of time that has passed since the
+ * stream began
+ * @param event {object} a hash of parameters that affect the timing
+ * of the stream
+ * @return {string} the lines of the playlist that would be available
+ * at the specified time
+ */
+ /*
+createManifest = function(mfest, duration, event) {
+  return extractResourceWindow(mfest, duration, event);
+};
+*/
+
+/**
+ * Filter a complete m3u8 playlist and return a view that simulates
+ * live playback for the given time.
+ * @param playlist {string} the contents of the m3u8 file
+ * @param time {number} the amount of time that has passed since the
+ * stream began
+ * @param options {object} a hash of parameters that affect the timing
+ * of the stream
+ * @return {string} the lines of the playlist that would be available
+ * at the specified time
+ */
+
+filterPlaylist = function(manifest, playlist, time, options) {
+  var startposition;
+  var filteredLines;
+  var endposition;
+  var header = manifest.header;
+  var resource = manifest.resources;
+  var overflow=0;
+  var lines = playlist.split('\n');
+
+  options.init=getInitialValue(lines);
+  // the number of the time-varying lines to be shown
+  var temptime=(time*0.001);
+    for (i = 0;i<lines.length;i++){
+  if(lines[i].indexOf('#EXT-X-PROGRAM-DATE-TIME') > -1){
+  var programDateTime = lines[options.init];
+  var programDateTimeString = programDateTime.substring(programDateTime.indexOf(':')+1);
+  var firstSegmentDate = new Date(programDateTimeString);
+  break;
+}
+}
+  startposition = options.init;
+  options.dropped=startposition;
+  debuglog('init: ' + options.init);
+  debuglog('time * 0.001 = ' + temptime);
+  debuglog('options.rate: ' + options.rate);
+  debuglog('(time * 0.001) / options.rate = ' + startposition);
+  debuglog('startposition' + startposition + '==options.init' + options.init);
+  debuglog(startposition == options.init);
+
+  debuglog('startposition' + startposition + '%' + options.step + ' = ' + (startposition%options.step));
+  if ((startposition%options.step) == 0) {
+    debuglog('dropped: ' + options.dropped);
+  }
+  debuglog('((startposition' + startposition + '-event.init' + options.init +
+    ') % (lines.length' + lines.length + '-event.init' + options.init + ')) + ' +
+    'event.init'+options.init+' = ');
+
+  endposition = startposition + temptime;
+
+  debuglog('lines.length: ' + lines.length);
+  debuglog('startposition: ' + startposition);
+  debuglog('endposition: ' + endposition);
+
+  if (endposition>lines.length) {
+    overflow = endposition-lines.length;
+    debuglog('overflow: ' + overflow);
+  }
+  if (filteredLines == undefined){
+    filteredLines = lines.slice(0, startposition);
+  }
+
+
+  for (i = 0;i < resource.length;i++) {
+    if (filteredLines.length<=endposition){
+      if (resource[i].header) {
+        for(j = 0;j<resource.length; j++){
+          if(lines[j].indexOf('#EXT-X-PROGRAM-DATE-TIME') > -1){
+        if(i==0){
+          filteredLines.push('#EXT-X-PROGRAM-DATE-TIME' + ':' + programDateTimeString);
+        }
+        if (i!=0){
+          var index =resource[i-1].header.substring(resource[i-1].header.indexOf('#EXTINF:'));
+          var segmentDuration = index.substring(index.indexOf(':')+1).slice(0,-1);
+          firstSegmentDate.setMilliseconds(firstSegmentDate.getMilliseconds() + parseFloat(segmentDuration));
+          filteredLines.push(('#EXT-X-PROGRAM-DATE-TIME') + ':' +  firstSegmentDate.toISOString());
+        }
+      }
+    }
+        filteredLines.push(resource[i].header);
+      }
+      if (resource[i].byterange) {
+        filteredLines.push(resource[i].byterange);
+        }
+      if (resource[i].tsfile) {
+        filteredLines.push(resource[i].tsfile);
+      }
+    }
+  }
+
+  debuglog(filteredLines[filteredLines.length-1]);
+
+  if (overflow>0){
+
+    for (i = 0;i<overflow;i++) {
+      var referencedResource = i % resource.length;
+
+      if (referencedResource === 0) {
+        filteredLines.push('#EXT-X-DISCONTINUITY');
+        event.discontinuity++;
+      }
+
+      if (resource[referencedResource].header) {
+        if (referencedResource==0){
+          var index =resource[resource.length-1].header.substring(resource[resource.length-1].header.indexOf('#EXTINF:'));
+          var segmentDuration = index.substring(index.indexOf(':')+1).slice(0,-1);
+        }
+        else{
+          var index =resource[referencedResource-1].header.substring(resource[referencedResource-1].header.indexOf('#EXTINF:'));
+          var segmentDuration = index.substring(index.indexOf(':')+1).slice(0,-1);
+        }
+        for(j = 0;j<resource.length; j++){
+          if(lines[j].indexOf('#EXT-X-PROGRAM-DATE-TIME') > -1){
+        firstSegmentDate.setMilliseconds(firstSegmentDate.getMilliseconds() + parseFloat(segmentDuration));
+        filteredLines.push(('#EXT-X-PROGRAM-DATE-TIME') + ':' +  firstSegmentDate.toISOString());
+      }
+    }
         filteredLines.push(resource[referencedResource].header);
       }
       if (resource[referencedResource].byterange) {
@@ -488,7 +751,7 @@ filterPlaylist = function(manifest, playlist, time, options) {
 };
 
 ui = function(request, response) {
-
+debugger;
   var result, key, rows = '', resources='', button, playType;
   fs.readFile(path.join(__dirname, 'ui', request.path), function (error, data) {
     if (error) {
@@ -496,14 +759,14 @@ ui = function(request, response) {
     }
     result = data.toString();
     for (key in streams) {
-      if(key.includes('event')){
+    /*  if(key.includes('event')){
         playType='event';
       }
       else if(key.includes('live')){
         playType='live';
-      }
+      }*/
       if (key.indexOf('.m3u8') >-1 ) {
-        button = '<td><button onclick=\"injectError(\'../'+key.replace(playType, 'error')+'?errorcode=1\')\">errortext</button></td>';
+        button = '<td><button onclick=\"injectError(\'..'+key.replace(/^/,'/error')+'?errorcode=1\')\">errortext</button></td>';
         rows += '<tr><td>' + key + '</td>'+
           button.replace('errorcode', 'tsnotfound').replace('errortext','ts404') +
           button.replace('errorcode', 'manifestnotfound').replace('errortext','manifest404') + '</tr>\n';
@@ -584,6 +847,7 @@ var parseQueryString = function( queryString ) {
 
 //Start each rendition at the same time
 master = function(request, response) {
+  debugger;
   var renditions = [],
     result,
     lines,
@@ -674,22 +938,28 @@ master = function(request, response) {
  * ever removed.
  */
 
-event = function(request, response) {
-
+eventLive = function(request, response) {
+debugger;
   fs.readFile(path.join(__dirname, 'data', request.path), function(error, data) {
-    var event, playlist, result, tsstreampath, stream;
+    var event, playlist, result, tsstreampath, stream, renditionName, duration;
     if (error) {
       return response.send(404, error);
     }
 
-    event = extend(getStream('event' + request.path), request.params);
+    event = extend(getStream(request.originalUrl), request.params);
+    renditionName = request.originalUrl.match(/.*\/(.+).m3u8/i)[1];
+    console.log('renditionName: ' + request.originalUrl);
+    if (!event.sequenceOffsets[renditionName]) {
+      event.sequenceOffsets[renditionName] = Math.floor(Math.random() * 50);
+    }
+    duration = Date.now() - event.start;
     playlist = data.toString();
-    if (manifest['event' + request.path] == undefined) {
+    if (manifest[request.originalUrl] == undefined) {
 
       playlist = data.toString();
       manifestHeader = getHeaderObjects(playlist);
       manifestResources = getResources(playlist, request);
-      manifest['event' + request.path] =
+      manifest[request.originalUrl] =
       {
         header: manifestHeader,
         resources: manifestResources
@@ -716,7 +986,7 @@ event = function(request, response) {
 
     if (event.tsnotfound>0) {
       //Pick a future .ts file to inject 404
-      tsstreampath = manifest['event' + request.path].resources[event.lastStartPosition + event.window + 1].tsfile;
+      tsstreampath = manifest[request.originalUrl].resources[event.lastStartPosition + event.window + 1].tsfile;
       tsstreampath = trimCharacters(tsstreampath, ['/','.']);
       console.log('Target for 404: ' + tsstreampath);
       stream = getStream(tsstreampath);
@@ -736,17 +1006,26 @@ event = function(request, response) {
       }
     }
     event.rate = event.rate ? event.rate : manifestHeader.TargetDuration.value;
-    result = filterPlaylist( manifest['event' + request.path],playlist,
-      Date.now() - event.start,
-      event);
 
-    if (playlist.length === result.length) {
-      resetLiveStream('event/' + request.path);
+    if(request.originalUrl.indexOf('event') > -1){
+      result = extractResourceWindow(request.originalUrl,manifest[request.originalUrl],playlist,
+        duration,
+        event);
+        response.setHeader('Content-type', 'application/x-mpegURL');
+        response.charset = 'UTF-8';
+        response.write(result);
+    } else if(request.originalUrl.indexOf('live') > -1){
+      result = extractResourceWindow(request.originalUrl,manifest[request.originalUrl],playlist, duration, event);
+      response.setHeader('Content-type', 'application/x-mpegURL');
+      response.charset = 'UTF-8';
+      response.write(result.join('\n'));
     }
 
-    response.setHeader('Content-type', 'application/x-mpegURL');
-    response.charset = 'UTF-8';
-    response.write(result);
+    if (playlist.length === result.length) {
+      resetLiveStream(request.originalUrl);
+    }
+
+
     response.status(200);
     response.end();
   });
@@ -755,8 +1034,8 @@ event = function(request, response) {
 redirect = function(request, response) {
 
   var redirectKey;
-  event = extend(getStream('redirect' + request.path), request.query);
-  redirectKey = 'redirect' + request.path;
+  event = extend(getStream(request.originalUrl), request.query);
+  redirectKey = request.originalUrl;
   debuglog(redirectKey + ' - ' + redirect[redirectKey]);
   if (processErrors(request, response, event) == true) {
     console.log('errors processed tsnotfound=' + event.tsnotfound);
@@ -793,6 +1072,7 @@ dataRequest = function(request, response) {
 };
 
 processErrors = function(request, response, event) {
+
   if (event.tsnotfound>0 && request.path.indexOf('.ts') > -1) {
     event.tsnotfound--;
     console.log('send ts 404');
@@ -808,7 +1088,7 @@ processErrors = function(request, response, event) {
   if (event.resetStream>0) {
     //1 - Reset just this stream
     if (event.resetStream==1) {
-      resetLiveStream('live' + request.path);
+      resetLiveStream(request.originalUrl);
     }
     //2 - Reset all streams
     if (event.resetStream==2) {
@@ -819,7 +1099,7 @@ processErrors = function(request, response, event) {
     //1 - Stop just this stream
 
     if (event.stopStream==1) {
-      stopLiveStream('live' + request.path);
+      stopLiveStream(request.originalUrl);
     }
     //2 - Stop all streams
     if (event.stopStream==2) {
@@ -834,16 +1114,7 @@ processErrors = function(request, response, event) {
  */
 injectError = function(request, response) {
 
-  var playType;
-  for (key in streams) {
-    if(key.includes('event')){
-      playType='event';
-    }
-    else if(key.includes('live')){
-      playType='live';
-    }
-  }
-  var streamname=  playType + request.path;
+  var streamname=  request.originalUrl;
   event = extend(getStream(streamname), request.query);
   console.log('tsnotfound in ' + streamname + ' = ' + event.tsnotfound);
   return response.send(200, 'injected into ' + streamname);
@@ -870,19 +1141,18 @@ trimCharacters = function(str, char) {
  * old segments are removed at a fixed rate.
  */
 live = function(request, response) {
-
+debugger;
   var duration, event, playlist, result, renditionName, manifestHeader,
     manifestResources, streampath, tsstreampath, stream;
-
 
   fs.readFile(path.join(__dirname, 'data', request.path), function (error, data) {
     if (error) {
       return response.send(404, error);
     }
 
-    streampath = 'live' + request.path;
+    streampath = request.originalUrl;
     event = extend(getStream(streampath), request.query);
-    renditionName = request.path.match(/.*\/(.+).m3u8/i)[1];
+    renditionName = request.originalUrl.match(/.*\/(.+).m3u8/i)[1];
     console.log('renditionName: ' + streampath);
     if (!event.sequenceOffsets[renditionName]) {
       event.sequenceOffsets[renditionName] = Math.floor(Math.random() * 50);
@@ -953,7 +1223,7 @@ live = function(request, response) {
 };
 
 module.exports = {
-  event: event,
+  eventLive: eventLive,
   live: live,
   dataRequest: dataRequest,
   injectError: injectError,
