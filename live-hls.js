@@ -353,9 +353,9 @@ var firstSegmentDate = new Date(programDateTimeString);
     debuglog('rate: ' + event.rate);
     console.log(event.dropped);
     filteredLines=extractHeader(header, event);
-    if(event.dropped == 0){
+    if(event.dropped < 1){
     //  filteredLines.push('#EXT-X-PROGRAM-DATE-TIME' + ':' + programDateTimeString);
-        if (resource[0].ProgramDateTime) {
+        if (resource[0].ProgramDateTime.tag != '') {
           filteredLines.push(resource[0].ProgramDateTime.tag + ':' +  resource[0].ProgramDateTime.value);
         }
         if (resource[0].header) {
@@ -370,9 +370,9 @@ var firstSegmentDate = new Date(programDateTimeString);
     }
 
     if (event.dropped > 0 && event.dropped<=resource.length){
-      console.log('test');
-    
-      //   if(event.dropped<=resource.length){
+
+
+
           for (m=0; m<event.dropped; m++){
          if(resource[m].header.indexOf('#EXTINF:')> -1) {
 
@@ -381,31 +381,21 @@ var firstSegmentDate = new Date(programDateTimeString);
         }
 
        }
-    // }
-      //  if(event.dropped > resource.length) {
 
-
-    //   }
 
     for(k = startposition;k <= endposition;k++) {
          console.log(k);
-        if(resource[k-1].ProgramDateTime){
-        //  for(j = 0;j<resource.length; j++){
-        //   if(lines[j].indexOf('#EXT-X-PROGRAM-DATE-TIME') > -1){
+        if(resource[k-1].ProgramDateTime.tag != ''){
 
-        //  if (k > 0){
             var d = firstSegmentDate.toISOString();
             var index =resource[k-1].header.substring(resource[k-1].header.indexOf('#EXTINF:'));
             var segmentDuration = index.substring(index.indexOf(':')+1).slice(0,-1);
             firstSegmentDate.setTime(firstSegmentDate.getTime() + durationSum);
-            //console.log('ishita  '+resource[k].ProgramDateTime.tag);
             resource[k].ProgramDateTime.tag = '#EXT-X-PROGRAM-DATE-TIME';
             resource[k].ProgramDateTime.value = firstSegmentDate.toISOString();
             filteredLines.push(resource[k].ProgramDateTime.tag + ':' +  resource[k].ProgramDateTime.value);
 
-        //  }
-      //  }
-    //  }
+
         }
         if (resource[k].header) {
 
@@ -422,7 +412,7 @@ var firstSegmentDate = new Date(programDateTimeString);
 }
 
   if (overflow>0) {
-    //if(event.dropped > resource.length){
+
     for(l = 0;l<overflow;l++) {
       var referencedResource = l % resource.length;
 
@@ -454,12 +444,12 @@ var firstSegmentDate = new Date(programDateTimeString);
         filteredLines.push(resource[referencedResource].tsfile);
       }
     }
-  //}
+
   }
   event.lastStartPosition = startposition;
   return filteredLines;
 } else if (streamType.indexOf('event') > -1) {
-var temptime=(duration*0.001);
+  var temptime=(duration*0.001);
   startposition = event.init;
   event.dropped=startposition;
   debuglog('init: ' + event.init);
@@ -491,7 +481,6 @@ var temptime=(duration*0.001);
     filteredLines = lines.slice(0, startposition);
   }
 
-
   for (i = 0;i < resource.length;i++) {
     if (filteredLines.length<=endposition){
       if (resource[i].header) {
@@ -504,7 +493,10 @@ var temptime=(duration*0.001);
           var index =resource[i-1].header.substring(resource[i-1].header.indexOf('#EXTINF:'));
           var segmentDuration = index.substring(index.indexOf(':')+1).slice(0,-1);
           firstSegmentDate.setMilliseconds(firstSegmentDate.getMilliseconds() + parseFloat(segmentDuration));
-          filteredLines.push(('#EXT-X-PROGRAM-DATE-TIME') + ':' +  firstSegmentDate.toISOString());
+          resource[i].ProgramDateTime.tag = '#EXT-X-PROGRAM-DATE-TIME';
+          resource[i].ProgramDateTime.value = firstSegmentDate.toISOString();
+          filteredLines.push(resource[i].ProgramDateTime.tag + ':' +  resource[i].ProgramDateTime.value);
+
         }
       }
     }
@@ -543,7 +535,9 @@ var temptime=(duration*0.001);
         for(j = 0;j<resource.length; j++){
           if(lines[j].indexOf('#EXT-X-PROGRAM-DATE-TIME') > -1){
         firstSegmentDate.setMilliseconds(firstSegmentDate.getMilliseconds() + parseFloat(segmentDuration));
-        filteredLines.push(('#EXT-X-PROGRAM-DATE-TIME') + ':' +  firstSegmentDate.toISOString());
+        resource[referencedResource].ProgramDateTime.tag = '#EXT-X-PROGRAM-DATE-TIME';
+        resource[referencedResource].ProgramDateTime.value = firstSegmentDate.toISOString();
+        filteredLines.push(resource[referencedResource].ProgramDateTime.tag + ':' +  resource[referencedResource].ProgramDateTime.value);
       }
     }
         filteredLines.push(resource[referencedResource].header);
@@ -560,46 +554,6 @@ var temptime=(duration*0.001);
   return filteredLines.join('\n');
   }
 
-
-
-    //
-
-
-
-
-
-/*
-    if (resource[i].header) {
-      lines.push(resource[i].header);
-    }
-    if (resource[i].byterange) {
-      lines.push(resource[i].byterange);
-    }
-    if (resource[i].tsfile) {
-      lines.push(resource[i].tsfile);
-    }
-  //}
-  if (overflow>0) {
-    for(i = 0;i<overflow;i++) {
-      var referencedResource = i % resource.length;
-
-      if (referencedResource === 0) {
-        lines.push('#EXT-X-DISCONTINUITY');
-      }
-
-      if (resource[referencedResource].header) {
-        lines.push(resource[referencedResource].header);
-      }
-      if (resource[referencedResource].byterange) {
-        lines.push(resource[referencedResource].byterange);
-      }
-      if (resource[referencedResource].tsfile) {
-        lines.push(resource[referencedResource].tsfile);
-      }
-    }
-  }
-  event.lastStartPosition = startposition;
-  return lines;*/
 };
 
 /**
@@ -629,6 +583,8 @@ createManifest = function(mfest, duration, event) {
  * @return {string} the lines of the playlist that would be available
  * at the specified time
  */
+
+ /*
 
 filterPlaylist = function(manifest, playlist, time, options) {
   var startposition;
@@ -749,7 +705,7 @@ filterPlaylist = function(manifest, playlist, time, options) {
   options.counter++;
   return filteredLines.join('\n');
 };
-
+*/
 ui = function(request, response) {
 debugger;
   var result, key, rows = '', resources='', button, playType;
@@ -759,12 +715,7 @@ debugger;
     }
     result = data.toString();
     for (key in streams) {
-    /*  if(key.includes('event')){
-        playType='event';
-      }
-      else if(key.includes('live')){
-        playType='live';
-      }*/
+
       if (key.indexOf('.m3u8') >-1 ) {
         button = '<td><button onclick=\"injectError(\'..'+key.replace(/^/,'/error')+'?errorcode=1\')\">errortext</button></td>';
         rows += '<tr><td>' + key + '</td>'+
@@ -1140,6 +1091,7 @@ trimCharacters = function(str, char) {
  * Simulate a sliding window live playlist. New segments are added and
  * old segments are removed at a fixed rate.
  */
+ /*
 live = function(request, response) {
 debugger;
   var duration, event, playlist, result, renditionName, manifestHeader,
@@ -1221,7 +1173,7 @@ debugger;
     response.end();
   });
 };
-
+*/
 module.exports = {
   eventLive: eventLive,
   live: live,
